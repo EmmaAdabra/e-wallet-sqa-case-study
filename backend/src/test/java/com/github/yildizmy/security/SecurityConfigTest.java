@@ -17,9 +17,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
 
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
@@ -52,10 +50,6 @@ class SecurityConfigTest {
         @MockBean
         private MessageSourceConfig messageConfig;
 
-        /**
-         * Provides a real AuthEntryPointJwt so the filter chain returns 401
-         * consistently across local and CI environments.
-         */
         static class TestEntryPointConfig {
                 @Bean
                 @Primary
@@ -87,12 +81,10 @@ class SecurityConfigTest {
         }
 
         @Test
-        void protectedEndpoints_shouldRejectMalformedToken() throws Exception {
-                MvcResult result = mockMvc.perform(get("/api/v1/wallets/1")
+        void protectedEndpoints_shouldReturn401_WhenMalformedToken() throws Exception {
+                mockMvc.perform(get("/api/v1/wallets/1")
                                 .header("Authorization", "Bearer this.is.not.valid"))
-                                .andReturn();
-                assertNotEquals(200, result.getResponse().getStatus(),
-                                "A malformed Bearer token must not grant access to protected endpoints");
+                                .andExpect(status().isUnauthorized());
         }
 
         @Test
