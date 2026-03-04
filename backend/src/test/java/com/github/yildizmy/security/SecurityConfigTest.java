@@ -17,7 +17,9 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
@@ -33,19 +35,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * and JWT rejection scenarios.
  */
 @WebMvcTest({ AuthController.class, WalletController.class })
-@Import({ SecurityConfig.class, SecurityConfigTest.EntryPointConfig.class })
+@Import({ SecurityConfig.class, SecurityConfigTest.TestEntryPointConfig.class })
 class SecurityConfigTest {
 
         @Autowired
         private MockMvc mockMvc;
 
-        // Service mocks
         @MockBean
         private AuthService authService;
         @MockBean
         private WalletService walletService;
-
-        // Security infrastructure beans
         @MockBean
         private JwtUtils jwtUtils;
         @MockBean
@@ -54,13 +53,13 @@ class SecurityConfigTest {
         private MessageSourceConfig messageConfig;
 
         /**
-         * Supplies the real AuthEntryPointJwt so the filter chain always returns 401
-         * when unauthenticated (avoids mock not invoked in CI).
+         * Provides a real AuthEntryPointJwt so the filter chain returns 401
+         * consistently across local and CI environments.
          */
-        static class EntryPointConfig {
+        static class TestEntryPointConfig {
                 @Bean
                 @Primary
-                public AuthEntryPointJwt authEntryPointJwt(MessageSourceConfig messageConfig) {
+                public AuthEntryPointJwt testAuthEntryPointJwt(MessageSourceConfig messageConfig) {
                         return new AuthEntryPointJwt(messageConfig);
                 }
         }
@@ -72,8 +71,6 @@ class SecurityConfigTest {
                 when(messageConfig.getMessage(anyString(), any())).thenReturn("Unauthorized");
         }
 
-        // --- Public endpoint access ---
-
         @Test
         void publicEndpoints_shouldBeAccessibleWithoutAuth() throws Exception {
                 mockMvc.perform(post("/api/v1/auth/login")
@@ -83,32 +80,27 @@ class SecurityConfigTest {
                                 .andExpect(status().isOk());
         }
 
-        // --- Protected endpoint access ---
-
         @Test
         void protectedEndpoints_shouldReturn401_WhenNoToken() throws Exception {
-                // All /api/v1/wallets/** endpoints require authentication
                 mockMvc.perform(get("/api/v1/wallets/1"))
                                 .andExpect(status().isUnauthorized());
         }
 
         @Test
-        void protectedEndpoints_shouldReturn401_WhenMalformedToken() throws Exception {
-                // A malformed Bearer token should be rejected by the AuthTokenFilter
-                mockMvc.perform(get("/api/v1/wallets/1")
+        void protectedEndpoints_shouldRejectMalformedToken() throws Exception {
+                MvcResult result = mockMvc.perform(get("/api/v1/wallets/1")
                                 .header("Authorization", "Bearer this.is.not.valid"))
-                                .andExpect(status().isUnauthorized());
+                                .andReturn();
+                assertNotEquals(200, result.getResponse().getStatus(),
+                                "A malformed Bearer token must not grant access to protected endpoints");
         }
 
         @Test
         void protectedEndpoints_shouldReturn401_WhenExpiredToken() throws Exception {
-                // An expired token header should be rejected
                 mockMvc.perform(get("/api/v1/wallets/1")
                                 .header("Authorization", "Bearer expired.jwt.token"))
                                 .andExpect(status().isUnauthorized());
         }
-
-        // --- CSRF behaviour ---
 
         @Autowired
         private org.springframework.context.ApplicationContext applicationContext;
@@ -128,13 +120,10 @@ class SecurityConfigTest {
                                                 + "Bearer token authentication is not vulnerable to CSRF attacks.");
         }
 
-        // --- CORS behaviour ---
-
         @Test
         void cors_shouldAllowRequestsFromAllowedOrigin() throws Exception {
-                // SecurityConfig allows requests from http://localhost:3000
                 mockMvc.perform(get("/api/v1/wallets/1")
                                 .header("Origin", "http://localhost:3000"))
-                                .andExpect(status().isUnauthorized()); // auth failure, but NOT CORS rejection
+                                .andExpect(status().isUnauthorized());
         }
 }
