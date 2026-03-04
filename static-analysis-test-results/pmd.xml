@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pmd xmlns="http://pmd.sourceforge.net/report/2.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pmd.sourceforge.net/report/2.0.0 https://pmd.github.io/schema/report_2_0_0.xsd" version="7.17.0" timestamp="2026-03-02T12:38:19.993">
+<file name="C:\Users\ADB\Desktop\module 3\e-wallet-sqa-case-study\backend\src\main\java\com\github\yildizmy\common\Constants.java">
+<violation beginline="5" endline="5" begincolumn="1" endcolumn="25" rule="UnnecessaryImport" ruleset="Code Style" package="com.github.yildizmy.common" class="Constants" externalInfoUrl="https://docs.pmd-code.org/pmd-doc-7.17.0/pmd_rules_java_codestyle.html#unnecessaryimport" priority="4">
+Unused import 'java.util.Arrays'
+</violation>
+</file>
+<file name="C:\Users\ADB\Desktop\module 3\e-wallet-sqa-case-study\backend\src\main\java\com\github\yildizmy\security\JwtUtils.java">
+<violation beginline="34" endline="34" begincolumn="29" endcolumn="58" rule="UselessParentheses" ruleset="Code Style" package="com.github.yildizmy.security" class="JwtUtils" method="generateJwtToken" externalInfoUrl="https://docs.pmd-code.org/pmd-doc-7.17.0/pmd_rules_java_codestyle.html#uselessparentheses" priority="4">
+Useless parentheses around `userPrincipal.getUsername()`.
+</violation>
+<violation beginline="36" endline="36" begincolumn="41" endcolumn="53" rule="UselessParentheses" ruleset="Code Style" package="com.github.yildizmy.security" class="JwtUtils" method="generateJwtToken" externalInfoUrl="https://docs.pmd-code.org/pmd-doc-7.17.0/pmd_rules_java_codestyle.html#uselessparentheses" priority="4">
+Useless parentheses around `new Date()`.
+</violation>
+</file>
+<file name="C:\Users\ADB\Desktop\module 3\e-wallet-sqa-case-study\backend\src\main\java\com\github\yildizmy\validator\ValidIban.java">
+<violation beginline="19" endline="19" begincolumn="10" endcolumn="21" rule="UnnecessaryFullyQualifiedName" ruleset="Code Style" package="com.github.yildizmy.validator" class="ValidIban" externalInfoUrl="https://docs.pmd-code.org/pmd-doc-7.17.0/pmd_rules_java_codestyle.html#unnecessaryfullyqualifiedname" priority="4">
+Unnecessary qualifier 'ElementType': 'FIELD' is already in scope because it is imported in this file
+</violation>
+</file>
+</pmd>

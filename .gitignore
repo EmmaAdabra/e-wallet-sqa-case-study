@@ -1,5 +1,12 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files
 
+# SQA Assessment Help Materials
+/module-assessment-help-materials
+/scripts
+/image_evidence
+/report
+random-md-docs/
+
 HELP.md
 logs/
 backend/target/

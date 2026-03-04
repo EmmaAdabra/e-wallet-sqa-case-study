@@ -22,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.lang.NonNull;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
@@ -238,6 +239,78 @@ class WalletServiceTest {
         assertThrows(InsufficientFundsException.class, () -> walletService.transferFunds(request));
     }
 
+    // Phase 1A: Fund Transfer Edge Cases
+
+    @Test
+    void transferFunds_shouldThrowExceptionWhenSameWallet() {
+        // Decision Table: self-transfer (fromWalletIban == toWalletIban) must be rejected
+        var wallet = createTestWallet(1L, "SAME123", "My Wallet", BigDecimal.valueOf(1000));
+        var request = createTestTransactionRequest("SAME123", "SAME123", BigDecimal.valueOf(200));
+
+        when(walletRepository.findByIban("SAME123")).thenReturn(Optional.of(wallet));
+
+        assertThrows(IllegalArgumentException.class, () -> walletService.transferFunds(request));
+    }
+
+    @Test
+    void transferFunds_shouldThrowExceptionForZeroAmount() {
+        // BVA: zero is the lower boundary — a transfer of zero should be rejected
+        var request = createTestTransactionRequest("FROM123", "TO123", BigDecimal.ZERO);
+
+        assertThrows(IllegalArgumentException.class, () -> walletService.transferFunds(request));
+    }
+
+    @Test
+    void transferFunds_shouldThrowExceptionForNegativeAmount() {
+        // EP (invalid partition): negative amounts must be rejected
+        var request = createTestTransactionRequest("FROM123", "TO123", BigDecimal.valueOf(-100));
+
+        assertThrows(IllegalArgumentException.class, () -> walletService.transferFunds(request));
+    }
+
+    @Test
+    void transferFunds_shouldTransferExactBalance() {
+        // BVA: amount exactly equal to balance — compareTo returns 0 (not < 0) so transfer must succeed
+        var fromWallet = createTestWallet(1L, "FROM123", "From Wallet", BigDecimal.valueOf(500));
+        var toWallet = createTestWallet(2L, "TO123", "To Wallet", BigDecimal.valueOf(200));
+        var request = createTestTransactionRequest("FROM123", "TO123", BigDecimal.valueOf(500));
+
+        when(walletRepository.findByIban("TO123")).thenReturn(Optional.of(toWallet));
+        when(walletRepository.findByIban("FROM123")).thenReturn(Optional.of(fromWallet));
+        when(transactionService.create(request)).thenReturn(new CommandResponse(1L));
+
+        var result = walletService.transferFunds(request);
+
+        assertNotNull(result);
+        assertEquals(1L, result.id());
+        assertEquals(BigDecimal.ZERO, fromWallet.getBalance());
+        assertEquals(BigDecimal.valueOf(700), toWallet.getBalance());
+        verify(walletRepository).save(toWallet);
+        verify(transactionService).create(request);
+    }
+
+    @Test
+    void transferFunds_shouldThrowExceptionWhenFromWalletNotFound() {
+        // Decision Table: missing source wallet precondition must throw NoSuchElementFoundException
+        var toWallet = createTestWallet(2L, "TO123", "To Wallet", BigDecimal.valueOf(500));
+        var request = createTestTransactionRequest("NOTEXIST", "TO123", BigDecimal.valueOf(200));
+
+        when(walletRepository.findByIban("TO123")).thenReturn(Optional.of(toWallet));
+        when(walletRepository.findByIban("NOTEXIST")).thenReturn(Optional.empty());
+
+        assertThrows(NoSuchElementFoundException.class, () -> walletService.transferFunds(request));
+    }
+
+    @Test
+    void transferFunds_shouldThrowExceptionWhenToWalletNotFound() {
+        // Decision Table: missing destination wallet precondition must throw NoSuchElementFoundException
+        var request = createTestTransactionRequest("FROM123", "NOTEXIST", BigDecimal.valueOf(200));
+
+        when(walletRepository.findByIban("NOTEXIST")).thenReturn(Optional.empty());
+
+        assertThrows(NoSuchElementFoundException.class, () -> walletService.transferFunds(request));
+    }
+
     @Test
     void addFunds_shouldAddFundsToWallet() {
         var toWallet = createTestWallet(1L, "TO123", "To Wallet", BigDecimal.valueOf(500));
@@ -272,8 +345,130 @@ class WalletServiceTest {
         verify(transactionService).create(request);
     }
 
+    // Phase 1B: AddFunds/WithdrawFunds Edge Cases
+
+    @Test
+    void addFunds_shouldThrowExceptionForNegativeAmount() {
+        // EP (invalid): negative amount must be rejected
+        var request = createTestTransactionRequest(null, "TO123", BigDecimal.valueOf(-100));
+
+        assertThrows(IllegalArgumentException.class, () -> walletService.addFunds(request));
+    }
+
+    @Test
+    void addFunds_shouldThrowExceptionForZeroAmount() {
+        // BVA: zero is the lower boundary — adding zero funds must be rejected
+        var request = createTestTransactionRequest(null, "TO123", BigDecimal.ZERO);
+
+        assertThrows(IllegalArgumentException.class, () -> walletService.addFunds(request));
+    }
+
+    @Test
+    void withdrawFunds_shouldThrowExceptionWhenInsufficientFunds() {
+        // BVA: balance (100) < withdrawal (200) must throw InsufficientFundsException
+        var fromWallet = createTestWallet(1L, "FROM123", "From Wallet", BigDecimal.valueOf(100));
+        var request = createTestTransactionRequest("FROM123", null, BigDecimal.valueOf(200));
+
+        when(walletRepository.findByIban("FROM123")).thenReturn(Optional.of(fromWallet));
+
+        assertThrows(InsufficientFundsException.class, () -> walletService.withdrawFunds(request));
+    }
+
+    @Test
+    void withdrawFunds_shouldWithdrawExactBalance() {
+        // BVA: withdrawal amount exactly equal to balance — compareTo returns 0 (not < 0) so must succeed
+        var fromWallet = createTestWallet(1L, "FROM123", "From Wallet", BigDecimal.valueOf(500));
+        var request = createTestTransactionRequest("FROM123", null, BigDecimal.valueOf(500));
+
+        when(walletRepository.findByIban("FROM123")).thenReturn(Optional.of(fromWallet));
+        when(transactionService.create(request)).thenReturn(new CommandResponse(1L));
+
+        var result = walletService.withdrawFunds(request);
+
+        assertNotNull(result);
+        assertEquals(1L, result.id());
+        assertEquals(BigDecimal.ZERO, fromWallet.getBalance());
+        verify(walletRepository).save(fromWallet);
+        verify(transactionService).create(request);
+    }
+
+    @Test
+    void withdrawFunds_shouldThrowExceptionForNegativeAmount() {
+        // EP (invalid): negative amount must be rejected
+        var request = createTestTransactionRequest("FROM123", null, BigDecimal.valueOf(-100));
+
+        assertThrows(IllegalArgumentException.class, () -> walletService.withdrawFunds(request));
+    }
+
+    // Phase 1C: Update/Delete (Untested Methods)
+
+    @Test
+    void update_shouldUpdateWallet() {
+        // Happy path: wallet exists, IBAN and name unchanged — update succeeds
+        var foundWallet = createTestWallet(1L, "TEST123", "Test Wallet", BigDecimal.valueOf(1000));
+        var request = createTestWalletRequest(1L, "TEST123", "Test Wallet", BigDecimal.valueOf(1000));
+        var updatedWallet = createTestWallet(1L, "TEST123", "Test Wallet", BigDecimal.valueOf(1000));
+
+        when(walletRepository.findById(1L)).thenReturn(Optional.of(foundWallet));
+        when(walletRequestMapper.toWallet(request)).thenReturn(updatedWallet);
+
+        var result = walletService.update(1L, request);
+
+        assertNotNull(result);
+        assertEquals(1L, result.id());
+        verify(walletRepository).findById(1L);
+        verify(walletRepository).save(updatedWallet);
+    }
+
+    @Test
+    void update_shouldThrowExceptionWhenWalletNotFound() {
+        // Error path: wallet with given id does not exist
+        var request = createTestWalletRequest(1L, "TEST123", "Test Wallet", BigDecimal.valueOf(1000));
+
+        when(walletRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(NoSuchElementFoundException.class, () -> walletService.update(99L, request));
+        verify(walletRepository).findById(99L);
+    }
+
+    @Test
+    void update_shouldThrowExceptionForDuplicateIban() {
+        // Error path: new IBAN is different from existing and already taken by another wallet
+        var foundWallet = createTestWallet(1L, "OLD_IBAN", "Test Wallet", BigDecimal.valueOf(1000));
+        var request = createTestWalletRequest(1L, "NEW_IBAN", "Test Wallet", BigDecimal.valueOf(1000));
+
+        when(walletRepository.findById(1L)).thenReturn(Optional.of(foundWallet));
+        when(walletRepository.existsByIbanIgnoreCase("NEW_IBAN")).thenReturn(true);
+
+        assertThrows(ElementAlreadyExistsException.class, () -> walletService.update(1L, request));
+        verify(walletRepository).findById(1L);
+        verify(walletRepository).existsByIbanIgnoreCase("NEW_IBAN");
+    }
+
+    @Test
+    void deleteById_shouldDeleteWallet() {
+        // Happy path: wallet exists and is deleted
+        var wallet = createTestWallet(1L, "TEST123", "Test Wallet", BigDecimal.valueOf(1000));
+
+        when(walletRepository.findById(1L)).thenReturn(Optional.of(wallet));
+
+        walletService.deleteById(1L);
+
+        verify(walletRepository).findById(1L);
+        verify(walletRepository).delete(wallet);
+    }
+
+    @Test
+    void deleteById_shouldThrowExceptionWhenWalletNotFound() {
+        // Error path: wallet with given id does not exist
+        when(walletRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(NoSuchElementFoundException.class, () -> walletService.deleteById(99L));
+        verify(walletRepository).findById(99L);
+    }
+
     // Helper Methods
-    private Wallet createTestWallet(Long id, String iban, String name, BigDecimal balance) {
+    private @NonNull Wallet createTestWallet(Long id, String iban, String name, BigDecimal balance) {
         var wallet = new Wallet();
         wallet.setId(id);
         wallet.setIban(iban);

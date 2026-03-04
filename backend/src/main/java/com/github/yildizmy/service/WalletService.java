@@ -21,6 +21,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import static com.github.yildizmy.common.MessageKeys.*;
@@ -138,10 +139,14 @@ public class WalletService {
      */
     @Transactional
     public CommandResponse transferFunds(TransactionRequest request) {
+        validatePositiveAmount(request.getAmount());
+
         final Wallet toWallet = getByIban(request.getToWalletIban());
         final Wallet fromWallet = getByIban(request.getFromWalletIban());
 
-        // check if the balance of sender wallet has equal or higher to/than transfer amount
+        if (fromWallet.getIban().equalsIgnoreCase(toWallet.getIban()))
+            throw new IllegalArgumentException("Source and destination wallets must be different");
+
         if (fromWallet.getBalance().compareTo(request.getAmount()) < 0)
             throw new InsufficientFundsException(messageConfig.getMessage(ERROR_INSUFFICIENT_FUNDS));
 
@@ -166,9 +171,10 @@ public class WalletService {
      */
     @Transactional
     public CommandResponse addFunds(TransactionRequest request) {
+        validatePositiveAmount(request.getAmount());
+
         final Wallet toWallet = getByIban(request.getToWalletIban());
 
-        // update balance of the receiver wallet
         toWallet.setBalance(toWallet.getBalance().add(request.getAmount()));
 
         walletRepository.save(toWallet);
@@ -186,9 +192,10 @@ public class WalletService {
      */
     @Transactional
     public CommandResponse withdrawFunds(TransactionRequest request) {
+        validatePositiveAmount(request.getAmount());
+
         final Wallet fromWallet = getByIban(request.getFromWalletIban());
 
-        // check if the balance of sender wallet has equal or higher to/than transfer amount
         if (fromWallet.getBalance().compareTo(request.getAmount()) < 0)
             throw new InsufficientFundsException(messageConfig.getMessage(ERROR_INSUFFICIENT_FUNDS));
 
@@ -200,6 +207,11 @@ public class WalletService {
 
         final CommandResponse response = transactionService.create(request);
         return CommandResponse.builder().id(response.id()).build();
+    }
+
+    private void validatePositiveAmount(BigDecimal amount) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0)
+            throw new IllegalArgumentException("Amount must be greater than zero");
     }
 
     /**

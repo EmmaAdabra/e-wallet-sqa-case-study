@@ -8,8 +8,8 @@ import AuthService from '../../services/AuthService';
 
 export default function LoginForm() {
   const defaultValues = {
-    username: 'johndoe',
-    password: 'johnd@e',
+    username: '',
+    password: '',
   };
 
   const navigate = useNavigate();
