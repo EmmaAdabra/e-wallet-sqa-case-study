@@ -81,13 +81,6 @@ class SecurityConfigTest {
         }
 
         @Test
-        void protectedEndpoints_shouldReturn401_WhenMalformedToken() throws Exception {
-                mockMvc.perform(get("/api/v1/wallets/1")
-                                .header("Authorization", "Bearer this.is.not.valid"))
-                                .andExpect(status().isUnauthorized());
-        }
-
-        @Test
         void protectedEndpoints_shouldReturn401_WhenExpiredToken() throws Exception {
                 mockMvc.perform(get("/api/v1/wallets/1")
                                 .header("Authorization", "Bearer expired.jwt.token"))

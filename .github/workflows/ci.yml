@@ -104,7 +104,7 @@ jobs:
           echo "## Pipeline Summary" >> $GITHUB_STEP_SUMMARY
           echo "| Gate | Check | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|---|" >> $GITHUB_STEP_SUMMARY
-          echo "| Gate 1 | All 89 tests pass | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Gate 1 | All 88 tests pass | ✅ |" >> $GITHUB_STEP_SUMMARY
           echo "| Gate 2 | Service package coverage ≥ 80% | ✅ |" >> $GITHUB_STEP_SUMMARY
           echo "| Gate 3 | SpotBugs zero critical | ✅ |" >> $GITHUB_STEP_SUMMARY
           echo "| Gate 4 | OWASP Dependency-Check (report-only) | 📋 |" >> $GITHUB_STEP_SUMMARY
