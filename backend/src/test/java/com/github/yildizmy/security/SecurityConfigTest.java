@@ -9,15 +9,16 @@ import com.github.yildizmy.config.SecurityConfig;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
@@ -32,8 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * and JWT rejection scenarios.
  */
 @WebMvcTest({ AuthController.class, WalletController.class })
-@Import(SecurityConfig.class)
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
+@Import({ SecurityConfig.class, SecurityConfigTest.EntryPointConfig.class })
 class SecurityConfigTest {
 
         @Autowired
@@ -51,21 +51,25 @@ class SecurityConfigTest {
         @MockBean
         private UserDetailsServiceImpl userDetailsService;
         @MockBean
-        private AuthEntryPointJwt authEntryPointJwt;
-        @MockBean
         private MessageSourceConfig messageConfig;
 
+        /**
+         * Supplies the real AuthEntryPointJwt so the filter chain always returns 401
+         * when unauthenticated (avoids mock not invoked in CI).
+         */
+        static class EntryPointConfig {
+                @Bean
+                @Primary
+                public AuthEntryPointJwt authEntryPointJwt(MessageSourceConfig messageConfig) {
+                        return new AuthEntryPointJwt(messageConfig);
+                }
+        }
+
         @BeforeEach
-        void setUp() throws Exception {
-                lenient()
-                                .doAnswer(invocation -> {
-                                        HttpServletResponse response = invocation.getArgument(1);
-                                        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                                        return null;
-                                })
-                                .when(authEntryPointJwt)
-                                .commence(Mockito.any(), Mockito.any(), Mockito.any());
+        void setUp() {
                 lenient().when(jwtUtils.validateJwtToken(anyString())).thenReturn(false);
+                when(messageConfig.getMessage(anyString())).thenReturn("Unauthorized");
+                when(messageConfig.getMessage(anyString(), any())).thenReturn("Unauthorized");
         }
 
         // --- Public endpoint access ---
