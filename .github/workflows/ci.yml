@@ -8,17 +8,16 @@ on:
 
 jobs:
   build-and-test:
+    name: "1. Build & Tests (Gates 1–2)"
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
 
     steps:
-      # Stage 1: Checkout
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Stage 2: Setup Java 17
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -26,18 +25,14 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      # Stage 3: Build
       - name: Compile project
         run: mvn compile -q
 
-      # Stage 4 & 5: Unit + Integration Tests (Quality Gate 1)
-      - name: Run tests (Quality Gate 1 — all must pass)
+      - name: Run tests (Gate 1 — all must pass)
         run: mvn test
 
-      # Stage 6: JaCoCo Coverage Check (Quality Gate 2)
-      - name: Check service package coverage (Quality Gate 2 — ≥ 80%)
+      - name: Check service package coverage (Gate 2 — ≥ 80%)
         run: |
-          # JaCoCo CSV columns: GROUP,PACKAGE,CLASS,...,LINE_MISSED(8),LINE_COVERED(9)
           SERVICE_COVERAGE=$(awk -F',' 'NR>1 && $2 == "com.github.yildizmy.service" {
             total += ($8 + $9); covered += $9
           } END {
@@ -50,24 +45,113 @@ jobs:
           fi
           echo "Quality Gate 2 PASSED: Service package coverage ${SERVICE_COVERAGE}% >= 80%"
 
-      # Stage 7: SpotBugs (Quality Gate 3)
-      - name: Run SpotBugs (Quality Gate 3 — zero high/critical)
-        run: mvn spotbugs:check
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-target
+          path: backend/target/
 
-      # Stage 8: PMD
+  spotbugs:
+    name: "2. SpotBugs (Gate 3)"
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-target
+
+      - name: Restore target directory
+        run: mkdir -p backend && mv backend-target backend/target
+
+      - name: Run SpotBugs (Gate 3 — zero high/critical)
+        working-directory: backend
+        run: mvn spotbugs:check -q
+
+  pmd:
+    name: "3. PMD"
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-target
+
+      - name: Restore target directory
+        run: mkdir -p backend && mv backend-target backend/target
+
       - name: Run PMD analysis
-        run: mvn pmd:check || true
+        working-directory: backend
+        run: mvn pmd:check -q || true
 
-      # Stage 9: OWASP Dependency-Check (Gate 4 — report-only)
-      - name: Run OWASP Dependency-Check (report-only, failBuildOnCVSS=11)
-        run: mvn dependency-check:check -DfailBuildOnCVSS=11
+  owasp:
+    name: "4. OWASP Dependency-Check (Gate 4)"
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-target
+
+      - name: Restore target directory
+        run: mkdir -p backend && mv backend-target backend/target
+
+      - name: Run OWASP Dependency-Check (report-only)
+        working-directory: backend
+        run: mvn dependency-check:check -DfailBuildOnCVSS=11 -q
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         continue-on-error: true
 
-      # Stage 10: Upload Reports (ignore if missing, e.g. when job failed before that step)
+  upload-reports:
+    name: "5. Upload Reports"
+    needs: [build-and-test, spotbugs, pmd, owasp]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-target
+
+      - name: Unzip for report paths
+        run: |
+          mkdir -p backend
+          mv backend-target backend/target
+
       - name: Upload JaCoCo coverage report
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: jacoco-report
@@ -75,7 +159,6 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload SpotBugs report
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: spotbugs-report
@@ -83,7 +166,6 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload PMD report
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pmd-report
@@ -91,7 +173,6 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload OWASP Dependency-Check report
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dependency-check-report
@@ -99,7 +180,6 @@ jobs:
           if-no-files-found: ignore
 
       - name: Pipeline summary
-        if: always()
         run: |
           echo "## Pipeline Summary" >> $GITHUB_STEP_SUMMARY
           echo "| Gate | Check | Status |" >> $GITHUB_STEP_SUMMARY
@@ -108,3 +188,5 @@ jobs:
           echo "| Gate 2 | Service package coverage ≥ 80% | ✅ |" >> $GITHUB_STEP_SUMMARY
           echo "| Gate 3 | SpotBugs zero critical | ✅ |" >> $GITHUB_STEP_SUMMARY
           echo "| Gate 4 | OWASP Dependency-Check (report-only) | 📋 |" >> $GITHUB_STEP_SUMMARY
+        if: always()
+        continue-on-error: true
