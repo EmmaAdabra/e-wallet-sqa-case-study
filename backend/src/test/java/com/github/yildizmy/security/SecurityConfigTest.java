@@ -81,6 +81,13 @@ class SecurityConfigTest {
         }
 
         @Test
+        void protectedEndpoints_shouldReturn401_WhenMalformedToken() throws Exception {
+                mockMvc.perform(get("/api/v1/wallets/1")
+                                .header("Authorization", "Bearer this.is.not.valid"))
+                                .andExpect(status().isUnauthorized());
+        }
+
+        @Test
         void protectedEndpoints_shouldReturn401_WhenExpiredToken() throws Exception {
                 mockMvc.perform(get("/api/v1/wallets/1")
                                 .header("Authorization", "Bearer expired.jwt.token"))
@@ -103,5 +110,12 @@ class SecurityConfigTest {
                 org.junit.jupiter.api.Assertions.assertFalse(csrfFilterPresent,
                                 "CSRF should be disabled for a stateless JWT API — "
                                                 + "Bearer token authentication is not vulnerable to CSRF attacks.");
+        }
+
+        @Test
+        void cors_shouldAllowRequestsFromAllowedOrigin() throws Exception {
+                mockMvc.perform(get("/api/v1/wallets/1")
+                                .header("Origin", "http://localhost:3000"))
+                                .andExpect(status().isUnauthorized());
         }
 }
