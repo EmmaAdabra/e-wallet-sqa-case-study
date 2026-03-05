@@ -66,13 +66,14 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      - name: Restore build artifacts
+        run: mkdir -p backend/target
+
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           name: backend-target
-
-      - name: Restore target directory
-        run: mkdir -p backend && mv backend-target backend/target
+          path: backend/target
 
       - name: Run SpotBugs (Gate 3 — zero high/critical)
         working-directory: backend
@@ -93,13 +94,14 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      - name: Restore build artifacts
+        run: mkdir -p backend/target
+
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           name: backend-target
-
-      - name: Restore target directory
-        run: mkdir -p backend && mv backend-target backend/target
+          path: backend/target
 
       - name: Run PMD analysis
         working-directory: backend
@@ -120,13 +122,14 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      - name: Restore build artifacts
+        run: mkdir -p backend/target
+
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           name: backend-target
-
-      - name: Restore target directory
-        run: mkdir -p backend && mv backend-target backend/target
+          path: backend/target
 
       - name: Run OWASP Dependency-Check (report-only)
         working-directory: backend
@@ -141,15 +144,14 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     steps:
+      - name: Restore build artifacts
+        run: mkdir -p backend/target
+
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           name: backend-target
-
-      - name: Unzip for report paths
-        run: |
-          mkdir -p backend
-          mv backend-target backend/target
+          path: backend/target
 
       - name: Upload JaCoCo coverage report
         uses: actions/upload-artifact@v4
